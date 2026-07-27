@@ -1,0 +1,5 @@
+Model,Accuracy
+Z-score Rule (3σ),0.8214876033057851
+Logistic Regression,0.7912087912087912
+Random Forest,0.9010989010989011
+XGBoost,0.8901098901098901
