@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import roc_auc_score, classification_report
 
 MALE_PATH = "outputs/cleaned_male.csv"
 FIGS_DIR = "outputs/figures"
@@ -111,6 +114,61 @@ def measurement_error_analysis(male, n_sims=50):
     return summary
 
 
+def problem3(male):
+    print("\n" + "=" * 60)
+    print("  PROBLEM 3: Multi-Factor Timing Model")
+    print("=" * 60)
+
+    features = ["gestational_age_weeks", "bmi", "age", "height", "weight",
+                "blood_draw_number", "raw_reads", "gc_content", "alignment_ratio"]
+    existing = [c for c in features if c in male.columns]
+    X = male[existing].dropna()
+    y = male.loc[X.index, "threshold_reached"]
+    X = (X - X.mean()) / X.std()
+
+    lr = LogisticRegression(max_iter=1000, random_state=42)
+    lr.fit(X, y)
+    y_prob_lr = lr.predict_proba(X)[:, 1]
+
+    print("\nLogistic Regression Coefficients:")
+    for name, coef in zip(existing, lr.coef_[0]):
+        print(f"  {name}: {coef:.4f}")
+    print(f"  ROC-AUC: {roc_auc_score(y, y_prob_lr):.4f}")
+
+    coeff_df = pd.DataFrame({"feature": existing, "coefficient": lr.coef_[0]})
+    coeff_df.to_csv(os.path.join(TABLES_DIR, "logistic_coefficients.csv"), index=False)
+
+    rf = RandomForestClassifier(n_estimators=200, max_depth=6, random_state=42, n_jobs=-1)
+    rf.fit(X, y)
+    y_prob_rf = rf.predict_proba(X)[:, 1]
+    print(f"\nRandom Forest ROC-AUC: {roc_auc_score(y, y_prob_rf):.4f}")
+
+    fi = pd.DataFrame({"feature": existing, "importance": rf.feature_importances_})
+    fi = fi.sort_values("importance", ascending=False)
+    print("\nRandom Forest Feature Importances:")
+    print(fi.to_string(index=False))
+    fi.to_csv(os.path.join(TABLES_DIR, "rf_feature_importance.csv"), index=False)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    axes[0].barh(coeff_df.sort_values("coefficient")["feature"],
+                 coeff_df.sort_values("coefficient")["coefficient"])
+    axes[0].set_xlabel("Coefficient")
+    axes[0].set_title("Logistic Regression Coefficients")
+
+    axes[1].barh(fi.sort_values("importance")["feature"],
+                 fi.sort_values("importance")["importance"])
+    axes[1].set_xlabel("Importance")
+    axes[1].set_title("Random Forest Feature Importances")
+
+    plt.tight_layout()
+    fig_path = os.path.join(FIGS_DIR, "problem3_feature_importance.png")
+    plt.savefig(fig_path, dpi=150, bbox_inches="tight")
+    print(f"Saved: {fig_path}")
+    plt.close()
+
+    return lr, rf
+
+
 def main():
     os.makedirs(FIGS_DIR, exist_ok=True)
     os.makedirs(TABLES_DIR, exist_ok=True)
@@ -137,6 +195,9 @@ def main():
     optimal_q.to_csv(os.path.join(TABLES_DIR, "problem2_optimal_timing_quantile.csv"), index=False)
     plot_group_probs(timing_q, group_col="group",
                      title="Problem 2: Threshold Probability by Quantile BMI Group")
+
+    # Problem 3: Multi-factor timing model
+    lr, rf = problem3(male)
 
     # Measurement error
     summary = measurement_error_analysis(male, n_sims=50)

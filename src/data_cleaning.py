@@ -88,6 +88,7 @@ if __name__ == "__main__":
     male = flag_quality(male)
     
     female = clean_data(female_raw)
+    
     female = flag_quality(female)
     
     df = pd.concat([male, female], ignore_index=True)
